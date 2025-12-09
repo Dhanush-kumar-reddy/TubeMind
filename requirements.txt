@@ -1,0 +1,11 @@
+streamlit
+langchain==0.3.7
+langchain-community==0.3.7
+langchain-core==0.3.19
+langchain-groq==0.2.1
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+openai-whisper
+yt-dlp
+tiktoken
