@@ -19,7 +19,7 @@ graph LR
     E --> F{User Question}
     F --> G[Llama 3.3 via Groq]
     G --> H[Answer + Timestamp Link]
-
+```
 ##  Tech Stack
 * **LLM Engine:** Llama 3.3 (70B) via Groq Cloud (Ultra-low latency)
 * **Transcription:** OpenAI Whisper (Local efficient base model)
