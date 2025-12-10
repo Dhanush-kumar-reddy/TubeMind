@@ -85,11 +85,15 @@ def process_video(video_url):
 def get_answer_chain(retriever):
     print("DEBUG: Entering get_answer_chain")
     
-    # 1. Check API Key
-    try:
+    # --- AWS COMPATIBILITY UPDATE ---
+    # Check Streamlit secrets first, then fall back to OS Environment Variables (for AWS)
+    if "GROQ_API_KEY" in st.secrets:
         api_key = st.secrets["GROQ_API_KEY"]
-    except Exception:
-        st.error("GROQ_API_KEY not found in .streamlit/secrets.toml")
+    else:
+        api_key = os.getenv("GROQ_API_KEY")
+        
+    if not api_key:
+        st.error("🚨 GROQ_API_KEY not found in secrets or environment variables.")
         st.stop()
         return None
 

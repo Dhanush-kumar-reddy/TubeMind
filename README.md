@@ -21,14 +21,14 @@ graph LR
     G --> H[Answer + Timestamp Link]
 ```
 ##  Tech Stack
-* **LLM Engine:** Llama 3.3 (70B) via Groq Cloud (Ultra-low latency)
-* **Transcription:** OpenAI Whisper (Local efficient base model)
-* **Vector Database:** FAISS (Facebook AI Similarity Search) - *Chosen for zero-dependency local performance.*
-* **Orchestration:** LangChain (Chains & Retrievers)
-* **Frontend:** Streamlit
+* LLM Engine:** Llama 3.3 (70B) via Groq Cloud (Ultra-low latency)
+* Transcription:** OpenAI Whisper (Local efficient base model)
+* Vector Database:** FAISS (Facebook AI Similarity Search) - *Chosen for zero-dependency local performance.*
+* Orchestration:** LangChain (Chains & Retrievers)
+* Frontend:** Streamlit
 
 ##  Key Features
-* ** Sub-Second Retrieval:** Uses FAISS in-memory indexing to find relevant video segments instantly.
-* ** Timestamp Linking:** Every answer includes a clickable "jump-to" link (e.g., `[04:12]`) that takes you to the exact moment in the video.
-* ** Intelligent Chunking:** Groups transcripts into context-aware blocks to prevent "context fragmentation" hallucinations.
-* ** Cloud Native:** Deployed on Streamlit Community Cloud with auto-installing dependencies (`ffmpeg`).
+* Sub-Second Retrieval:** Uses FAISS in-memory indexing to find relevant video segments instantly.
+* Timestamp Linking:** Every answer includes a clickable "jump-to" link (e.g., `[04:12]`) that takes you to the exact moment in the video.
+* Intelligent Chunking:** Groups transcripts into context-aware blocks to prevent "context fragmentation" hallucinations.
+* Cloud Native:** Deployed on Streamlit Community Cloud with auto-installing dependencies (`ffmpeg`).
