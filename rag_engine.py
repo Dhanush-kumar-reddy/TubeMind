@@ -85,19 +85,25 @@ def process_video(video_url):
 def get_answer_chain(retriever):
     print("DEBUG: Entering get_answer_chain")
     
-    # --- AWS COMPATIBILITY UPDATE ---
-    # Check Streamlit secrets first, then fall back to OS Environment Variables (for AWS)
-    if "GROQ_API_KEY" in st.secrets:
-        api_key = st.secrets["GROQ_API_KEY"]
-    else:
-        api_key = os.getenv("GROQ_API_KEY")
-        
+    # --- FIX: Check AWS Environment First (Crash Proof) ---
+    api_key = os.getenv("GROQ_API_KEY")
+
+    # Only check st.secrets if Env var is missing (for local dev)
+    if not api_key:
+        try:
+            # We wrap this in try-except to safely handle missing secrets.toml
+            if "GROQ_API_KEY" in st.secrets:
+                api_key = st.secrets["GROQ_API_KEY"]
+        except FileNotFoundError:
+            pass  # Safely ignore if file is missing
+            
     if not api_key:
         st.error("🚨 GROQ_API_KEY not found in secrets or environment variables.")
         st.stop()
         return None
+    # -------------------------------------------------------
 
-    # 2. Initialize LLM
+    # 2. Initialize LLM (Rest of your code is fine...)
     try:
         llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=api_key)
     except Exception as e:
