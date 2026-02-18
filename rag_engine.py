@@ -1,6 +1,8 @@
 import os
 import whisper
 import yt_dlp
+import tempfile
+import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -8,7 +10,6 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-import streamlit as st
 
 # --- Cached Models ---
 @st.cache_resource
@@ -26,48 +27,72 @@ def process_video(video_url):
     whisper_model = load_whisper_model()
     embeddings = load_embedding_model()
     
-    # 1. Download
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
-        'outtmpl': 'temp_audio.%(ext)s',
-        'quiet': True,
-        'no_warnings': True
-    }
+    # --- COOKIE HANDLING (The Fix for 403 Forbidden) ---
+    # Create a temporary file for cookies
+    cookie_path = None
+    temp_cookie_file = None
     
-    if os.path.exists("temp_audio.mp3"):
-        os.remove("temp_audio.mp3")
+    try:
+        # Check if cookies exist in Streamlit Secrets (Cloud)
+        if "YOUTUBE_COOKIES" in st.secrets:
+            # Create a temp file to store the cookies
+            temp_cookie_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt")
+            temp_cookie_file.write(st.secrets["YOUTUBE_COOKIES"])
+            temp_cookie_file.close() # Close it so other apps can read it
+            cookie_path = temp_cookie_file.name
+        # Fallback: Check for local cookies.txt file
+        elif os.path.exists("cookies.txt"):
+            cookie_path = "cookies.txt"
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([video_url])
+        # 1. Download Configuration
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
+            'outtmpl': 'temp_audio.%(ext)s',
+            'quiet': True,
+            'no_warnings': True,
+            'cookiefile': cookie_path  # Inject the cookies here
+        }
+        
+        if os.path.exists("temp_audio.mp3"):
+            os.remove("temp_audio.mp3")
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+            
+    except Exception as e:
+        # Clean up temp file if error occurs
+        if temp_cookie_file and os.path.exists(temp_cookie_file.name):
+            os.remove(temp_cookie_file.name)
+        raise e # Re-raise error to show in UI
+
+    # Clean up temp cookie file after download is successful
+    if temp_cookie_file and os.path.exists(temp_cookie_file.name):
+        os.remove(temp_cookie_file.name)
     
     # 2. Transcribe
     result = whisper_model.transcribe("temp_audio.mp3")
     
-    # --- INTELLIGENT CHUNKING (The Fix) ---
+    # --- INTELLIGENT CHUNKING ---
     docs = []
     current_chunk_text = ""
     current_chunk_start = 0
     
-    # We group segments until they reach ~1000 characters (approx 30-60 seconds of speech)
-    # This gives the LLM enough context to understand "What is RAG?"
+    # Group segments until ~1000 chars for better context
     for segment in result['segments']:
-        # If it's the start of a new chunk, record the timestamp
         if current_chunk_text == "":
             current_chunk_start = segment['start']
         
         current_chunk_text += segment['text'] + " "
         
-        # If chunk is big enough, save it and reset
         if len(current_chunk_text) >= 1000:
             doc = Document(
                 page_content=current_chunk_text.strip(),
                 metadata={"start_time": current_chunk_start}
             )
             docs.append(doc)
-            current_chunk_text = "" # Reset for next chunk
+            current_chunk_text = "" 
             
-    # Don't forget the last leftover chunk!
     if current_chunk_text:
         doc = Document(
             page_content=current_chunk_text.strip(),
@@ -98,8 +123,7 @@ def get_answer_chain(retriever):
         st.stop()
         return None
 
-
-    # 2. Initialize LLM (Rest of your code is fine...)
+    # 2. Initialize LLM
     try:
         llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=api_key)
     except Exception as e:
