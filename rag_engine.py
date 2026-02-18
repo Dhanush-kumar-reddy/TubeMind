@@ -4,6 +4,7 @@ import whisper
 import yt_dlp
 import base64
 import streamlit as st
+import tempfile
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
