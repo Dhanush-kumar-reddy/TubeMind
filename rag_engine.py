@@ -22,6 +22,7 @@ def extract_video_id(url):
     - https://www.youtube.com/watch?v=dQw4w9WgXcQ -> dQw4w9WgXcQ
     - https://youtu.be/dQw4w9WgXcQ -> dQw4w9WgXcQ
     """
+    # Regex for standard YouTube IDs (11 chars)
     regex = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
     match = re.search(regex, url)
     if match:
@@ -34,28 +35,31 @@ def process_video(video_url):
     
     # 1. Extract Video ID
     video_id = extract_video_id(video_url)
+    
     if not video_id:
         st.error("❌ Invalid YouTube URL. Could not find Video ID.")
         st.stop()
+        
+    print(f"DEBUG: Video ID extracted: {video_id}")
 
-    # 2. Fetch Transcript (The "Lightweight" Way)
-    transcript_text = []
+    # 2. Fetch Transcript
+    docs = []
     try:
-        # Tries to get English transcripts (manual or auto-generated)
+        # Attempt to fetch transcript
+        # We ask for manually created English, then auto-generated English
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
         
-        # --- INTELLIGENT CHUNKING ---
-        docs = []
         current_chunk_text = ""
         current_chunk_start = 0
         
-        # Group segments into chunks of ~1000 characters
+        # Group segments into chunks
         for entry in transcript:
             if current_chunk_text == "":
                 current_chunk_start = entry['start']
             
             current_chunk_text += entry['text'] + " "
             
+            # Create a chunk every ~1000 characters
             if len(current_chunk_text) >= 1000:
                 doc = Document(
                     page_content=current_chunk_text.strip(),
@@ -75,7 +79,7 @@ def process_video(video_url):
         print(f"DEBUG: Created {len(docs)} chunks from transcript.")
 
     except Exception as e:
-        st.error(f"❌ Could not retrieve transcript. The video might not have captions enabled.\nError: {e}")
+        st.error(f"❌ Could not retrieve transcript.\n\nReason: {e}")
         st.stop()
         
     # 3. Build FAISS Index
