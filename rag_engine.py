@@ -27,46 +27,51 @@ def process_video(video_url):
     whisper_model = load_whisper_model()
     embeddings = load_embedding_model()
     
-    # --- COOKIE HANDLING (The Fix for 403 Forbidden) ---
-    # Create a temporary file for cookies
+    # --- COOKIE HANDLING ---
     cookie_path = None
     temp_cookie_file = None
     
     try:
-        # Check if cookies exist in Streamlit Secrets (Cloud)
+        # Create temp cookie file if secret exists
         if "YOUTUBE_COOKIES" in st.secrets:
-            # Create a temp file to store the cookies
             temp_cookie_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt")
             temp_cookie_file.write(st.secrets["YOUTUBE_COOKIES"])
-            temp_cookie_file.close() # Close it so other apps can read it
+            temp_cookie_file.close()
             cookie_path = temp_cookie_file.name
-        # Fallback: Check for local cookies.txt file
         elif os.path.exists("cookies.txt"):
             cookie_path = "cookies.txt"
 
         # 1. Download Configuration
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
+            # FIX: Change 'bestaudio/best' to 'best'
+            # This downloads the best video+audio file if audio-only fails,
+            # ensuring we always get the file.
+            'format': 'best', 
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192'
+            }],
             'outtmpl': 'temp_audio.%(ext)s',
             'quiet': True,
             'no_warnings': True,
-            'cookiefile': cookie_path  # Inject the cookies here
+            'cookiefile': cookie_path
         }
         
+        # Clean up old file
         if os.path.exists("temp_audio.mp3"):
             os.remove("temp_audio.mp3")
 
+        # Download
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
             
     except Exception as e:
-        # Clean up temp file if error occurs
         if temp_cookie_file and os.path.exists(temp_cookie_file.name):
             os.remove(temp_cookie_file.name)
-        raise e # Re-raise error to show in UI
+        raise e 
 
-    # Clean up temp cookie file after download is successful
+    # Clean up cookies
     if temp_cookie_file and os.path.exists(temp_cookie_file.name):
         os.remove(temp_cookie_file.name)
     
@@ -78,13 +83,13 @@ def process_video(video_url):
     current_chunk_text = ""
     current_chunk_start = 0
     
-    # Group segments until ~1000 chars for better context
     for segment in result['segments']:
         if current_chunk_text == "":
             current_chunk_start = segment['start']
         
         current_chunk_text += segment['text'] + " "
         
+        # Chunk size ~1000 characters
         if len(current_chunk_text) >= 1000:
             doc = Document(
                 page_content=current_chunk_text.strip(),
@@ -108,22 +113,18 @@ def process_video(video_url):
     return vectorstore.as_retriever()
 
 def get_answer_chain(retriever):
-    # Try getting key from Streamlit secrets (Cloud) or Environment (Local)
     api_key = None
     
-    # Check Streamlit Cloud Secrets first (Standard way)
     if "GROQ_API_KEY" in st.secrets:
         api_key = st.secrets["GROQ_API_KEY"]
-    # Fallback to Environment Variable (Good for local testing)
     elif os.getenv("GROQ_API_KEY"):
         api_key = os.getenv("GROQ_API_KEY")
         
     if not api_key:
-        st.error("🚨 Groq API Key not found! Please add it to Streamlit Secrets.")
+        st.error("🚨 Groq API Key not found!")
         st.stop()
         return None
 
-    # 2. Initialize LLM
     try:
         llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=api_key)
     except Exception as e:
@@ -131,7 +132,6 @@ def get_answer_chain(retriever):
         st.stop()
         return None
     
-    # 3. Define Prompt
     system_prompt = (
         "You are a video analysis assistant. Use the following context to answer the question. "
         "The context includes transcripts with start times. "
@@ -146,7 +146,6 @@ def get_answer_chain(retriever):
         ("human", "{input}"),
     ])
     
-    # 4. Build Chain
     try:
         question_answer_chain = create_stuff_documents_chain(llm, prompt)
         rag_chain = create_retrieval_chain(retriever, question_answer_chain)

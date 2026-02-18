@@ -7,5 +7,5 @@ langchain-huggingface
 sentence-transformers
 faiss-cpu
 openai-whisper
-yt-dlp
+yt-dlp>=2025.1.26
 tiktoken
