@@ -46,7 +46,7 @@ def process_video(video_url):
     docs = []
     try:
         # ✅ FIX: Call get_transcript directly on the imported class
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript = YouTubeTranscriptApi().get_transcript(video_id)
         
         current_chunk_text = ""
         current_chunk_start = 0
