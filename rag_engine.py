@@ -2,6 +2,7 @@ import os
 import shutil
 import whisper
 import yt_dlp
+import base64
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
@@ -31,41 +32,56 @@ def process_video(video_url):
     whisper_model = load_whisper_model()
     embeddings = load_embedding_model()
     
-    # 2. Download Configuration (The Android Fix)
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        # ⬇️ THIS IS THE KEY FIX ⬇️
-        # Pretend to be an Android device to bypass IP blocking
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-        }],
-        'outtmpl': 'temp_audio.%(ext)s',
-        'quiet': False,
-        'no_warnings': False,
-        'ignoreerrors': True 
-    }
+    # --- COOKIE HANDLING (Base64 Fix) ---
+    cookie_path = None
+    temp_cookie_file = None
     
-    # Clean up old file
-    if os.path.exists("temp_audio.mp3"):
-        os.remove("temp_audio.mp3")
-
-    # Attempt Download
     try:
+        # Check for Base64 Cookies (Cloud)
+        if "YOUTUBE_COOKIES_B64" in st.secrets:
+            # Decode the base64 string back to bytes (preserving tabs!)
+            cookie_content = base64.b64decode(st.secrets["YOUTUBE_COOKIES_B64"])
+            
+            temp_cookie_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=".txt")
+            temp_cookie_file.write(cookie_content)
+            temp_cookie_file.close()
+            cookie_path = temp_cookie_file.name
+            
+        # Fallback for local testing
+        elif os.path.exists("cookies.txt"):
+            cookie_path = "cookies.txt"
+
+        # 2. Download Configuration
+        ydl_opts = {
+            'format': 'best',  # Use 'best' (Format 18) as proven by your local test
+            'outtmpl': 'temp_audio.%(ext)s',
+            'quiet': False,
+            'no_warnings': False,
+            'cookiefile': cookie_path, # Inject the perfect cookie file
+            
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192'
+            }],
+        }
+        
+        # Clean up old file
+        if os.path.exists("temp_audio.mp3"):
+            os.remove("temp_audio.mp3")
+
+        # Attempt Download
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
+            
     except Exception as e:
-        # If Android spoofing fails, show the error
-        st.error(f"Download Error: {e}")
-        st.stop()
-    
-    # 3. Verify Download Success
-    if not os.path.exists("temp_audio.mp3"):
-        st.error("❌ Download failed. YouTube blocked the request. Try a different video or try again later.")
-        st.stop()
+        if temp_cookie_file and os.path.exists(temp_cookie_file.name):
+            os.remove(temp_cookie_file.name)
+        raise e 
+
+    # Clean up cookies
+    if temp_cookie_file and os.path.exists(temp_cookie_file.name):
+        os.remove(temp_cookie_file.name)
 
     # 4. Transcribe
     result = whisper_model.transcribe("temp_audio.mp3")
