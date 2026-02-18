@@ -83,25 +83,21 @@ def process_video(video_url):
     return vectorstore.as_retriever()
 
 def get_answer_chain(retriever):
-    print("DEBUG: Entering get_answer_chain")
+    # Try getting key from Streamlit secrets (Cloud) or Environment (Local)
+    api_key = None
     
-    # --- FIX: Check AWS Environment First (Crash Proof) ---
-    api_key = os.getenv("GROQ_API_KEY")
-
-    # Only check st.secrets if Env var is missing (for local dev)
+    # Check Streamlit Cloud Secrets first (Standard way)
+    if "GROQ_API_KEY" in st.secrets:
+        api_key = st.secrets["GROQ_API_KEY"]
+    # Fallback to Environment Variable (Good for local testing)
+    elif os.getenv("GROQ_API_KEY"):
+        api_key = os.getenv("GROQ_API_KEY")
+        
     if not api_key:
-        try:
-            # We wrap this in try-except to safely handle missing secrets.toml
-            if "GROQ_API_KEY" in st.secrets:
-                api_key = st.secrets["GROQ_API_KEY"]
-        except FileNotFoundError:
-            pass  # Safely ignore if file is missing
-            
-    if not api_key:
-        st.error("🚨 GROQ_API_KEY not found in secrets or environment variables.")
+        st.error("🚨 Groq API Key not found! Please add it to Streamlit Secrets.")
         st.stop()
         return None
-    # -------------------------------------------------------
+
 
     # 2. Initialize LLM (Rest of your code is fine...)
     try:
