@@ -2,7 +2,6 @@ import os
 import shutil
 import whisper
 import yt_dlp
-import tempfile
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
@@ -24,7 +23,7 @@ def load_embedding_model():
 def process_video(video_url):
     print(f"DEBUG: Processing video {video_url}")
     
-    # 1. VERIFY FFMPEG (Crucial Debug Step)
+    # 1. VERIFY FFMPEG
     if not shutil.which("ffmpeg"):
         st.error("🚨 FFmpeg is not installed! The app needs to be Rebooted.")
         st.stop()
@@ -32,56 +31,40 @@ def process_video(video_url):
     whisper_model = load_whisper_model()
     embeddings = load_embedding_model()
     
-    # --- COOKIE HANDLING ---
-    cookie_path = None
-    temp_cookie_file = None
-    
-    try:
-        # Create temp cookie file if secret exists
-        if "YOUTUBE_COOKIES" in st.secrets:
-            temp_cookie_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt")
-            temp_cookie_file.write(st.secrets["YOUTUBE_COOKIES"])
-            temp_cookie_file.close()
-            cookie_path = temp_cookie_file.name
-        elif os.path.exists("cookies.txt"):
-            cookie_path = "cookies.txt"
-
-        # 2. Download Configuration (Robust)
-        ydl_opts = {
-            # Try audio-only first, then fallback to best video
-            'format': 'bestaudio/best', 
-            # Spoof a real browser to avoid "Bot" detection
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192'
-            }],
-            'outtmpl': 'temp_audio.%(ext)s',
-            'quiet': False, # Show errors in logs
-            'no_warnings': False,
-            'cookiefile': cookie_path,
-            'ignoreerrors': True # Try to keep going even if one format fails
-        }
+    # 2. Download Configuration (The Android Fix)
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        # ⬇️ THIS IS THE KEY FIX ⬇️
+        # Pretend to be an Android device to bypass IP blocking
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         
-        if os.path.exists("temp_audio.mp3"):
-            os.remove("temp_audio.mp3")
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192'
+        }],
+        'outtmpl': 'temp_audio.%(ext)s',
+        'quiet': False,
+        'no_warnings': False,
+        'ignoreerrors': True 
+    }
+    
+    # Clean up old file
+    if os.path.exists("temp_audio.mp3"):
+        os.remove("temp_audio.mp3")
 
+    # Attempt Download
+    try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
-            
     except Exception as e:
-        if temp_cookie_file and os.path.exists(temp_cookie_file.name):
-            os.remove(temp_cookie_file.name)
-        raise e 
-
-    # Clean up cookies
-    if temp_cookie_file and os.path.exists(temp_cookie_file.name):
-        os.remove(temp_cookie_file.name)
+        # If Android spoofing fails, show the error
+        st.error(f"Download Error: {e}")
+        st.stop()
     
     # 3. Verify Download Success
     if not os.path.exists("temp_audio.mp3"):
-        st.error("❌ Download failed. YouTube blocked the request. Please check your Cookies.")
+        st.error("❌ Download failed. YouTube blocked the request. Try a different video or try again later.")
         st.stop()
 
     # 4. Transcribe
