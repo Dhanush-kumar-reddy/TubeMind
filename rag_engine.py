@@ -32,7 +32,7 @@ def process_video(video_url):
     temp_cookie_file = None
     
     try:
-        # Create temp cookie file if secret exists
+        # Create temp cookie file if secret exists (Fix for 403 Forbidden)
         if "YOUTUBE_COOKIES" in st.secrets:
             temp_cookie_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt")
             temp_cookie_file.write(st.secrets["YOUTUBE_COOKIES"])
@@ -43,9 +43,9 @@ def process_video(video_url):
 
         # 1. Download Configuration
         ydl_opts = {
-            # FIX: Change 'bestaudio/best' to 'best'
-            # This downloads the best video+audio file if audio-only fails,
-            # ensuring we always get the file.
+            # FIX: Use 'best' instead of 'bestaudio/best'
+            # This allows yt-dlp to download a video file if audio-only is missing,
+            # and the post-processor below will still convert it to MP3.
             'format': 'best', 
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -67,11 +67,12 @@ def process_video(video_url):
             ydl.download([video_url])
             
     except Exception as e:
+        # Clean up temp file if error
         if temp_cookie_file and os.path.exists(temp_cookie_file.name):
             os.remove(temp_cookie_file.name)
         raise e 
 
-    # Clean up cookies
+    # Clean up cookies after download
     if temp_cookie_file and os.path.exists(temp_cookie_file.name):
         os.remove(temp_cookie_file.name)
     
@@ -89,7 +90,6 @@ def process_video(video_url):
         
         current_chunk_text += segment['text'] + " "
         
-        # Chunk size ~1000 characters
         if len(current_chunk_text) >= 1000:
             doc = Document(
                 page_content=current_chunk_text.strip(),
@@ -115,6 +115,7 @@ def process_video(video_url):
 def get_answer_chain(retriever):
     api_key = None
     
+    # Robust API Key Check
     if "GROQ_API_KEY" in st.secrets:
         api_key = st.secrets["GROQ_API_KEY"]
     elif os.getenv("GROQ_API_KEY"):
