@@ -1,7 +1,8 @@
 import os
 import re
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
+# ✅ FIX: Import the class directly
+from youtube_transcript_api import YouTubeTranscriptApi 
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -22,7 +23,6 @@ def extract_video_id(url):
     - https://www.youtube.com/watch?v=dQw4w9WgXcQ -> dQw4w9WgXcQ
     - https://youtu.be/dQw4w9WgXcQ -> dQw4w9WgXcQ
     """
-    # Regex for standard YouTube IDs (11 chars)
     regex = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
     match = re.search(regex, url)
     if match:
@@ -45,9 +45,8 @@ def process_video(video_url):
     # 2. Fetch Transcript
     docs = []
     try:
-        # Attempt to fetch transcript
-        # We ask for manually created English, then auto-generated English
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
+        # ✅ FIX: Call get_transcript directly on the imported class
+        transcript = YouTubeTranscriptApi.get_transcript(video_id)
         
         current_chunk_text = ""
         current_chunk_start = 0
